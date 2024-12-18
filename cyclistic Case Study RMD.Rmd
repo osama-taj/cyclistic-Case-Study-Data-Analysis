@@ -1,0 +1,358 @@
+---
+title: "cyclistic Case Study"
+author: "osama taj"
+date: "2024-12-09"
+output: html_document
+---
+
+# Introduction
+
+##the business task 
+How do annual members and casual riders use Cyclistic bikes  differently ? 
+
+
+This report analyzes bike usage patterns based on user types . The objective is to uncover insights such as:
+- The average trip duration by user type.
+- The most popular days for bike usage.
+- Patterns in bike usage over time.
+
+
+## Data Overview
+
+
+The dataset contains the following columns:
+
+- `birthyear`: The birth year of the user.
+- `gender`: The gender of the user (if available).
+- `usertype`: The type of user (e.g., Subscriber, Customer).
+- `to_station_name`: The name of the destination station.
+- `to_station_id`: The ID of the destination station.
+- `from_station_name`: The name of the starting station.
+- `from_station_id`: The ID of the starting station.
+- `tripduration`: The duration of each trip (in seconds).
+- `bikeid`: A unique identifier for each bike.
+- `end_time`: The date and time when the trip ended.
+- `start_time`: The date and time when the trip began.
+- `trip_id`: A unique identifier for each trip.
+
+
+The dataset was originally distributed across four separate csv files. These files were imported into into R Studio and combined to a a single data frame for analysis.
+
+The key steps in this process were:
+1. **Loading the Files**: Each  file was read into R using the `read.csv()` function.
+2. **Combining the Data**: The individual data frames were combined using the `dplyr::bind_rows()` function.
+3. **Cleaning and Preparing the Data**: Columns were standardized, and missing values were handled as necessary.
+
+
+## Data Cleaning
+
+To prepare the data for analysis, several cleaning steps were performed to ensure consistency and accuracy across the dataset:
+
+### Step 1: Standardizing Column Names
+```{r}
+q1=read.csv("Divvy_Trips_2019_Q1.csv")
+q2=read.csv("Divvy_Trips_2019_Q2.csv")
+q3=read.csv("Divvy_Trips_2019_Q3.csv")
+q4=read.csv("Divvy_Trips_2019_Q4.csv")
+```
+
+### Step 2: Standardizing Column Names
+The column names in data frame `q2` were adjusted to match the format used in the other data frames. This ensured uniformity and facilitated the merging process.
+
+```{r}
+library(tidyverse)
+library(dplyr)
+q2 <- q2 %>%
+  rename(
+    trip_id = X01...Rental.Details.Rental.ID,
+    start_time = X01...Rental.Details.Local.Start.Time,
+    end_time = X01...Rental.Details.Local.End.Time,
+    bikeid=X01...Rental.Details.Bike.ID,
+      tripduration=X01...Rental.Details.Duration.In.Seconds.Uncapped,
+      from_station_id=X03...Rental.Start.Station.ID,
+      from_station_name=X03...Rental.Start.Station.Name,
+      to_station_id=X02...Rental.End.Station.ID,
+      to_station_name=X02...Rental.End.Station.Name,
+      usertype=User.Type,
+      gender=Member.Gender,
+      birthyear=X05...Member.Details.Member.Birthday.Year
+    )
+```
+### Step 3: Formatting Date-Time Columns
+
+Load the required library
+library(lubridate)
+
+ Convert start_time and end_time in all data frames
+
+```{r}
+library(lubridate)
+q3 <- q3 %>%
+  mutate(
+    start_time = format(ymd_hms(start_time), "%m/%d/%Y %H:%M:%S"),
+    end_time = format(ymd_hms(end_time), "%m/%d/%Y %H:%M:%S")
+    )
+
+q4 <- q4 %>%
+  mutate(
+    start_time = format(ymd_hms(start_time), "%m/%d/%Y %H:%M:%S"),
+    end_time = format(ymd_hms(end_time), "%m/%d/%Y %H:%M:%S")
+  )
+
+q1 <- q1 %>%
+  mutate(
+    end_time = mdy_hm(end_time) %>% format("%Y-%m-%d %H:%M:%S") %>% ymd_hms(),
+    start_time = mdy_hm(start_time) %>% format("%Y-%m-%d %H:%M:%S") %>% ymd_hms()
+  )
+q2 <- q2 %>%
+  mutate(
+    end_time = mdy_hm(end_time) %>% format("%Y-%m-%d %H:%M:%S") %>% ymd_hms(),
+    start_time = mdy_hm(start_time) %>% format("%Y-%m-%d %H:%M:%S") %>% ymd_hms()
+  )
+q3 <- q3 %>%
+  mutate(
+    end_time = mdy_hms(end_time) %>% format("%Y-%m-%d %H:%M:%S") %>% ymd_hms(),
+    start_time = mdy_hms(start_time) %>% format("%Y-%m-%d %H:%M:%S") %>% ymd_hms()
+  )
+q4 <- q4 %>%
+  mutate(
+    end_time = mdy_hms(end_time) %>% format("%Y-%m-%d %H:%M:%S") %>% ymd_hms(),
+    start_time = mdy_hms(start_time) %>% format("%Y-%m-%d %H:%M:%S") %>% ymd_hms()
+  )
+
+
+```
+
+
+### Step 4: Combining All Data Frames
+
+ Combine all data frames into one
+```{r}
+library(dplyr)
+
+all_q <- bind_rows(q1, q2, q3, q4)
+```
+
+
+ Preview the combined data frame
+```{r}
+head(all_q)
+```
+### Step 5: Extracting Day and Month Names
+To facilitate time-based analysis, new columns were added to the combined data frame all_q to extract the day of the week and month from the start_time column. The wday() and month() functions from the lubridate package were used for this purpose
+
+
+```{r}
+library(lubridate)
+
+all_q <- all_q %>%
+  mutate(
+    day_name = wday(start_time, label = TRUE, abbr = FALSE),  # Full day name
+    month_name = month(start_time, label = TRUE, abbr = FALSE)  # Full month name
+  )
+```
+
+### Step 6:Cleaning and Standardizing the Gender Column
+The gender column was cleaned to ensure consistency by replacing any existing values with standardized codes:
+
+"M" for male
+"F" for female
+"N" for not defined
+
+```{r}
+all_q <- all_q %>%
+  mutate(
+    gender = ifelse(nchar(gender) > 0, substr(gender, 1, 1), "N")
+  )
+```
+
+### Step 7: Calculating Age
+To calculate the age of each individual, a new column age was created. This was done by subtracting the birthyear from the current year (2024). If the birthyear is missing (NA), the age was set to 0.
+
+```{r}
+all_q <- all_q %>%
+  mutate(
+    age = ifelse(is.na(birthyear), 0, 2024-birthyear)
+  )
+```
+
+### Step 8: Converting tripduration to Numeric
+To ensure the tripduration column is in the correct format for analysis, it was converted from its original format to numeric using the as.numeric() function.
+
+```{r}
+all_q$tripduration <- as.numeric(all_q$tripduration)
+```
+
+### Step 9: Handling Missing tripduration Values
+In cases where the tripduration column has missing values (NA), the duration was recalculated by subtracting the start_time from the end_time. The duration is computed in seconds using the difftime() function. If tripduration is not missing, the original value is retained.
+
+```{r}
+all_q <- all_q %>%
+  mutate(
+    tripduration = ifelse(
+      is.na(tripduration), 
+      as.numeric(difftime(end_time, start_time, units = "secs")), # Calculate duration in seconds
+      tripduration # Retain existing value if not NA
+    )
+  )
+```
+
+
+
+## Analysis and Results
+
+In this analysis, we explore bike share data to uncover patterns and trends based on various factors such as user type, trip duration, time of day, and demographics. The data was cleaned and processed, and the following analyses were performed:
+
+1. Distribution of trips by user type
+2. Average trip duration for each user type
+3. Most used days for each user type
+4. Monthly usage patterns
+5. Most used time of day for each user type
+6. Gender and age distribution of users
+
+
+#### Count the number of trips and percentage by user type
+```{r}
+counttypestrip <- all_q %>% count(usertype)
+percentages <- all_q %>%
+  count(usertype) %>%
+  mutate(Percentage = round((n / sum(n)) * 100, 1))
+print(percentages)
+```
+the chart 
+```{r}
+mycolors <- c("#455A64","#00897B","#1E88E5")
+
+ggplot(percentages, aes(x = "", y = Percentage, fill = usertype)) +
+  geom_bar(stat = "identity", width = 1 ,) +
+  coord_polar(theta = "y") +
+  geom_text(aes(label = paste0(round(Percentage, 1), "%")), 
+            position = position_stack(vjust = 0.5), color = "white") +
+  labs(title = "User Type Percentages") +
+  theme_void() +
+  scale_fill_manual(values = mycolors)
+```
+
+the chart show 77.2 % trips used by Subscriber and 22.8% by Customer
+
+
+#### Get the average trip duration for each user type
+```{r}
+library(dplyr)
+avg_tripduration <- all_q %>%
+  group_by(usertype) %>%
+  summarize(average_duration = mean(tripduration, na.rm = TRUE))
+```
+the chart 
+```{r}
+ggplot(avg_tripduration, aes(x = usertype, y = average_duration / 60, fill = usertype ,)) +  # Convert seconds to minutes
+  geom_bar(stat = "identity") +
+  labs(title = "Average Trip Duration by User Type", x = "User Type", y = "Average Duration (minutes)") +
+  theme_minimal() +
+  theme(legend.position = "none")+
+  scale_fill_manual(values = mycolors)
+```
+the chart show that the subscriber user thier avg trip duration is nearly 14 minuts and customer is thier avg duration is nealy 57 minuts 
+
+#### Find the most used day for each user type
+```{r}
+most_used_day <- all_q %>%
+  group_by(usertype, day_name) %>%  
+  summarize(usage_count = n()) %>%  
+  group_by(usertype)
+most_used_day <- most_used_day %>% arrange(usertype,usage_count)
+```
+
+the chart 
+```{r}
+ggplot(most_used_day, aes(x = day_name, y = usage_count, color = usertype, group = usertype)) +
+  geom_line(size = 1) +  # Line plot with a thickness of 1
+  labs(title = "Number of Trips per Day by User Type", x = "Day", y = "Number of Trips") +
+  theme_minimal() +
+  theme(legend.position = "bottom") +
+  scale_color_manual(values = mycolors)
+```
+
+
+the chart shows the number of trip for Subscriber user is rises to its highest levels in the middle of the week and declines at the beginning and end of the week ,but Customer thier trip number rises to its highest levels in the  the beginning and end of the week and declines in middle of the week
+
+#### Find the most used month for each user type
+```{r}
+mounth_use <- all_q %>%
+  group_by(usertype, month_name) %>%  # Group by user_type and date
+  summarize(usage_count = n()) 
+```
+
+the chart 
+```{r}
+ggplot(mounth_use, aes(x = month_name, y = usage_count, color = usertype, group = usertype)) +
+  geom_line(size = 1) +  # Line plot with a thickness of 1
+  labs(title = "Number of Trips per Month by User Type", x = "Month", y = "Number of Trips") +
+  theme_minimal() +
+  theme(legend.position = "bottom",
+        axis.text.x = element_text(angle = 45, hjust = 1)) +
+  scale_color_manual(values = mycolors)
+```
+
+the chart shows the number of trip for users  Subscriber and Customer start at lowest levels in the beginning of the year and continues rise until it   rises to its highest levels in the August month   and declines again u until the end of the year .
+
+
+#### Find the most used time for each user type
+```{r}
+sub_all_q <- data.frame()
+# Extract the time of day from the date_time column
+
+sub_all_q <- all_q %>%
+  mutate(start_time = as.POSIXct(start_time, format = "%Y-%m-%d %H:%M:%S"), 
+         hour_of_day = format(start_time, "%H")) 
+
+sub_all_q <- sub_all_q %>%
+  select(-birthyear,-gender,-to_station_name,-to_station_id,-from_station_name,-from_station_id,-tripduration,-bikeid,-end_time,-trip_id)
+sub_all_q <- sub_all_q %>%
+  select(-age,-month_name,-day_name,-start_time)
+
+
+# Find the most used time for each user_type
+most_used_time <- sub_all_q %>%
+  group_by(usertype, hour_of_day) %>%  # Group by user_type and time_of_day
+  summarize(usage_count = n()) %>%      # Count the number of times each time is used
+  group_by(usertype)   # Get the most used time for each user_type
+
+print(most_used_time)
+```
+
+the car 
+```{r}
+ggplot(most_used_time, aes(x = hour_of_day, y = usage_count, color = usertype, group = usertype )) +
+  geom_line(size = 1) +  # Line plot with a thickness of 1
+  labs(title = "Number of Trips per houre by User Type", x = "hour", y = "Number of Trips") +
+  theme_minimal() +
+  theme(legend.position = "bottom",
+        axis.text.x = element_text(angle = 45, hjust = 1)) +
+  scale_color_manual(values = mycolors)
+```
+
+the chart shows the number of trip for users  Subscriber its highest levels at 8.am colock and 5.pm colock , its the time for go and back from and to woek .
+whill Customer user at highest level at after noon 
+
+
+#### Find the avg age  for each user type
+
+```{r}
+avg_age <- all_q %>%
+  group_by(usertype, gender) %>% 
+  summarize(average_age = mean(age))
+
+print(avg_age)
+```
+
+#### Find the gender count  for each user type
+```{r}
+gender_count <- all_q %>%
+  group_by(usertype, gender) %>%  
+  summarize(gender_count = n())
+
+print(gender_count)
+```
+
+
